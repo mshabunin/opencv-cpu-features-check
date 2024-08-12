@@ -13,4 +13,5 @@ docker run -it \
     -v `pwd`/workspace:/workspace \
     ${tag} \
     python3 /scripts/test.py
+    # -k x86 # <--- test filter
     # /bin/bash

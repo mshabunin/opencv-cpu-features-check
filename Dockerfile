@@ -4,7 +4,7 @@ RUN \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends \
-        cmake ninja-build g++ g++-aarch64-linux-gnu ccache \
+        cmake ninja-build g++ g++-aarch64-linux-gnu g++-arm-linux-gnueabihf g++-riscv64-linux-gnu gcc-riscv64-linux-gnu ccache \
         python3
 
 VOLUME /opencv
