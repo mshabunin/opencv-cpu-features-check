@@ -2,9 +2,11 @@ import unittest
 import subprocess
 import os
 import re
+from pathlib import Path
+import shutil
 
-OPENCV = os.environ["OPENCV"]
-BUILD = os.environ["BUILD"]
+OPENCV = Path(os.environ["OPENCV"])
+BUILD = Path(os.environ["BUILD"])
 
 class MatchResult:
     def __init__(self, arr):
@@ -37,7 +39,10 @@ class TestBase(unittest.TestCase):
         self.assertDictEqual(actual.__dict__, expected.__dict__, "\nResults are different, actual raw output:\n{}\n".format(raw))
 
     def setUp(self):
-        subprocess.run("rm -rf *", shell=True, cwd=BUILD)
+        if BUILD.exists():
+            shutil.rmtree(BUILD)
+        os.makedirs(BUILD, exist_ok=True)
+
 
 
 class Test_x86_64(TestBase):
@@ -56,7 +61,7 @@ class Test_x86_64(TestBase):
         res = self.run_configure(["-DCPU_BASELINE=DETECT"])
         self.check_features(res, MatchResult(["SSE SSE2", "DETECT", None, "SSE4_1 SSE4_2 AVX FP16 AVX2 AVX512_SKX"]))
 
-    # will fail on other platforms than specific one
+    # will fail on platforms other than specific one
     def test_native(self):
         res = self.run_configure(["-DCPU_BASELINE=NATIVE"])
         self.check_features(res, MatchResult(["SSE SSE2 SSE3 SSSE3 SSE4_1 POPCNT SSE4_2 AVX FP16 AVX2 FMA3 AVX_512F AVX512_COMMON AVX512_SKX AVX512_CNL AVX512_CLX AVX512_ICL", "NATIVE", None, "SSE4_1 SSE4_2 AVX FP16 AVX2 AVX512_SKX"]))
@@ -74,5 +79,5 @@ class Test_AArch64(TestBase):
 if __name__ == '__main__':
     print("OPENCV={}".format(OPENCV))
     print("BUILD={}".format(BUILD))
-    os.makedirs(BUILD, exist_ok=True)
+    assert(OPENCV.exists())
     unittest.main(verbosity=3)
