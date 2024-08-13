@@ -9,6 +9,7 @@ import shutil
 log = logging.getLogger(__name__)
 OPENCV = Path(os.environ["OPENCV"])
 BUILD = Path(os.environ["BUILD"])
+UPDATED = True
 
 class MatchResult:
     def __init__(self, arr):
@@ -47,7 +48,7 @@ class TestBase(unittest.TestCase):
         log.info("process stderr:\n%s", popen_res.stderr.decode("utf-8"))
         self.assertEqual(popen_res.returncode, 0)
         actual = parse_vars()
-        self.assertDictEqual(actual.__dict__, MatchResult(expected).__dict__)
+        self.assertDictEqual(MatchResult(expected).__dict__, actual.__dict__)
 
     def setUp(self):
         log.info("\n===========\n%s\n===========\n", self.id())
@@ -65,16 +66,14 @@ class Test_x86_64(TestBase):
         self.check_features(
             [],
             ["SSE;SSE2;SSE3", "SSE3", "", "SSE4_1;SSE4_2;AVX;FP16;AVX2;AVX512_SKX"])
+        self.check_features(
+            ["-DCPU_BASELINE=DETECT"],
+            ["SSE;SSE2", "DETECT", "", "SSE4_1;SSE4_2;AVX;FP16;AVX2;AVX512_SKX"])
 
     def test_disable_sse2(self):
         self.check_features(
             ["-DCPU_BASELINE_DISABLE=SSE2"],
             ["SSE", "SSE3", "SSE2", "SSE4_1;SSE4_2;AVX;FP16;AVX2;AVX512_SKX"])
-
-    def test_detect(self):
-        self.check_features(
-            ["-DCPU_BASELINE=DETECT"],
-            ["SSE;SSE2", "DETECT", "", "SSE4_1;SSE4_2;AVX;FP16;AVX2;AVX512_SKX"])
 
     # will fail on platforms other than specific one
     def test_native(self):
@@ -88,27 +87,43 @@ class Test_AArch64(TestBase):
         return subprocess.run(["cmake", "-GNinja", "-DCMAKE_TOOLCHAIN_FILE={}/platforms/linux/aarch64-gnu.toolchain.cmake".format(OPENCV)] + args + [OPENCV], capture_output=True, cwd=BUILD)
 
     def test_default(self):
-        self.check_features(
-            [],
-            ["NEON;FP16", "NEON;FP16", ";VFPV3", "NEON_FP16;NEON_BF16;NEON_DOTPROD"])
+        if UPDATED:
+            self.check_features(
+                [],
+                ["NEON;FP16", "DETECT", "", ""])
+            self.check_features(
+                ["-DCPU_BASELINE=DETECT"],
+                ["NEON;FP16", "DETECT", "", ""])
+        else:
+            self.check_features(
+                [],
+                ["NEON;FP16", "NEON;FP16", ";VFPV3", "NEON_FP16;NEON_BF16;NEON_DOTPROD"])
+            self.check_features(
+                ["-DCPU_BASELINE=DETECT"],
+                ["NEON;FP16", "DETECT", ";VFPV3", "NEON_FP16;NEON_BF16;NEON_DOTPROD"])
 
-    def test_detect(self):
-        self.check_features(
-            ["-DCPU_BASELINE=DETECT"],
-            ["NEON;FP16", "DETECT", ";VFPV3", "NEON_FP16;NEON_BF16;NEON_DOTPROD"])
 
-    def test_disable_fp16(self):
-        self.check_features(
-            ["-DCPU_BASELINE_DISABLE=FP16"],
-            ["NEON", "NEON;FP16", "FP16;VFPV3", "NEON_FP16;NEON_BF16;NEON_DOTPROD"])
-        self.check_features(
-            ["-DCPU_BASELINE=NEON", "-DCPU_BASELINE_DISABLE=FP16"],
-            ["NEON", "NEON", "FP16;VFPV3", "NEON_FP16;NEON_BF16;NEON_DOTPROD"])
-
-    def test_disable_neon(self):
-        self.check_features(
-            ["-DCPU_BASELINE_DISABLE=NEON", "-DENABLE_NEON=OFF"],
-            ["", "NEON;FP16", "NEON;VFPV3", "NEON_FP16;NEON_BF16;NEON_DOTPROD"])
+    def test_disable(self):
+        if UPDATED:
+            self.check_features(
+                ["-DCPU_BASELINE_DISABLE=FP16"],
+                ["NEON", "DETECT", "FP16", ""])
+            self.check_features(
+                ["-DCPU_BASELINE=NEON", "-DCPU_BASELINE_DISABLE=FP16"],
+                ["NEON", "DETECT", "FP16", ""])
+            self.check_features(
+                ["-DCPU_BASELINE_DISABLE=NEON", "-DENABLE_NEON=OFF"],
+                ["FP16", "DETECT", "NEON", ""])
+        else:
+            self.check_features(
+                ["-DCPU_BASELINE_DISABLE=FP16"],
+                ["NEON", "NEON;FP16", "FP16;VFPV3", "NEON_FP16;NEON_BF16;NEON_DOTPROD"])
+            self.check_features(
+                ["-DCPU_BASELINE=NEON", "-DCPU_BASELINE_DISABLE=FP16"],
+                ["NEON", "NEON", "FP16;VFPV3", "NEON_FP16;NEON_BF16;NEON_DOTPROD"])
+            self.check_features(
+                ["-DCPU_BASELINE_DISABLE=NEON", "-DENABLE_NEON=OFF"],
+                ["", "NEON;FP16", "NEON;VFPV3", "NEON_FP16;NEON_BF16;NEON_DOTPROD"])
 
 
 class Test_ARM(TestBase):
@@ -116,19 +131,36 @@ class Test_ARM(TestBase):
         return subprocess.run(["cmake", "-GNinja", "-DCMAKE_TOOLCHAIN_FILE={}/platforms/linux/arm-gnueabi.toolchain.cmake".format(OPENCV)] + args + [OPENCV], capture_output=True, cwd=BUILD)
 
     def test_default(self):
-        self.check_features(
-            [],
-            ["", "DETECT", ";VFPV3;NEON", ""])
+        if UPDATED:
+            self.check_features(
+                [],
+                ["", "DETECT", "", ""])
+            self.check_features(
+                ["-DCPU_BASELINE=DETECT"],
+                ["", "DETECT", "", ""])
+        else:
+            self.check_features(
+                [],
+                ["", "DETECT", ";VFPV3;NEON", ""])
+            self.check_features(
+                ["-DCPU_BASELINE=DETECT"],
+                ["", "DETECT", ";VFPV3;NEON", ""])
 
-    def test_neon(self):
-        self.check_features(
-            ["-DCPU_BASELINE=NEON"],
-            ["", "NEON", ";VFPV3;NEON", ""])
-
-    def test_fp16(self):
-        self.check_features(
-            ["-DCPU_BASELINE=FP16"],
-            ["", "FP16", ";VFPV3;NEON", ""])
+    def test_feature(self):
+        if UPDATED:
+            self.check_features(
+                ["-DCPU_BASELINE=NEON"],
+                ["NEON", "NEON", "", ""])
+            self.check_features(
+                ["-DCPU_BASELINE=FP16"],
+                ["NEON;FP16", "FP16", "", ""])
+        else:
+            self.check_features(
+                ["-DCPU_BASELINE=NEON"],
+                ["", "NEON", ";VFPV3;NEON", ""])
+            self.check_features(
+                ["-DCPU_BASELINE=FP16"],
+                ["", "FP16", ";VFPV3;NEON", ""])
 
 
 class Test_RISCV(TestBase):
@@ -138,6 +170,9 @@ class Test_RISCV(TestBase):
     def test_default(self):
         self.check_features(
             [],
+            ["", "DETECT", "", ""])
+        self.check_features(
+            ["-DCPU_BASELINE=DETECT"],
             ["", "DETECT", "", ""])
 
 
